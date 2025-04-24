@@ -2,16 +2,20 @@ import os
 import subprocess
 from argparse import ArgumentParser
 
-def run_pipeline(mesh_path, pose_data_path, num_poses=1, render_360=False, num_views=8):
+def run_pipeline(mesh_path, pose_data_path, smpl_model_path=None, gender='neutral', 
+                 num_poses=1, render_360=False, num_views=8, use_matplotlib=True):
     """
     Run the complete pipeline for stages 4 and 5
     
     Args:
         mesh_path: Path to the input mesh (.obj file)
         pose_data_path: Path to the pose data (.pkl file)
+        smpl_model_path: Path to the SMPL model directory
+        gender: Gender for the SMPL model
         num_poses: Number of poses to process
         render_360: Whether to render 360 degree views
         num_views: Number of views for 360 rendering
+        use_matplotlib: Use matplotlib for rendering instead of pyrender
     """
     print("=" * 50)
     print("Running Stage 4: Pose Imposement")
@@ -24,6 +28,13 @@ def run_pipeline(mesh_path, pose_data_path, num_poses=1, render_360=False, num_v
         "--pose_data_path", pose_data_path,
         "--num_poses", str(num_poses)
     ]
+    
+    # Add SMPL model path if provided
+    if smpl_model_path:
+        command.extend(["--smpl_model_path", smpl_model_path])
+        
+    # Add gender if provided
+    command.extend(["--gender", gender])
     
     result = subprocess.run(command, capture_output=True, text=True)
     print(result.stdout)
@@ -66,6 +77,9 @@ def run_pipeline(mesh_path, pose_data_path, num_poses=1, render_360=False, num_v
         if render_360:
             command.extend(["--render_360", "--num_views", str(num_views)])
         
+        if use_matplotlib:
+            command.append("--use_matplotlib")
+        
         result = subprocess.run(command, capture_output=True, text=True)
         print(result.stdout)
         
@@ -80,12 +94,19 @@ def main():
                         help="Path to the input mesh (.obj file)")
     parser.add_argument("--pose_data_path", type=str, default="output/results/test_image/000.pkl",
                         help="Path to the pose data (.pkl file)")
+    parser.add_argument("--smpl_model_path", type=str, default=None,
+                        help="Path to the SMPL model directory")
+    parser.add_argument("--gender", type=str, default="neutral", 
+                        choices=["neutral", "male", "female"],
+                        help="Gender for the SMPL model")
     parser.add_argument("--num_poses", type=int, default=1,
                         help="Number of poses to process")
     parser.add_argument("--render_360", action="store_true",
                         help="Render 360 degree views")
     parser.add_argument("--num_views", type=int, default=8,
                         help="Number of views for 360 rendering")
+    parser.add_argument("--use_matplotlib", action="store_true", default=True,
+                        help="Use matplotlib for rendering instead of pyrender")
     
     args = parser.parse_args()
     
@@ -93,9 +114,12 @@ def main():
     run_pipeline(
         mesh_path=args.mesh_path,
         pose_data_path=args.pose_data_path,
+        smpl_model_path=args.smpl_model_path,
+        gender=args.gender,
         num_poses=args.num_poses,
         render_360=args.render_360,
-        num_views=args.num_views
+        num_views=args.num_views,
+        use_matplotlib=args.use_matplotlib
     )
     
     print("\nPipeline completed successfully!")
