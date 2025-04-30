@@ -3,7 +3,9 @@ import subprocess
 from argparse import ArgumentParser
 
 def run_pipeline(mesh_path, pose_data_path, smpl_model_path=None, gender='neutral', 
-                 num_poses=1, render_360=False, num_views=8, use_matplotlib=True):
+                 num_poses=1, render_360=False, num_views=8, use_matplotlib=True,
+                 optimize_pose=True, use_vposer=True, vposer_path=None, 
+                 use_tpose_fallback=True, debug=False):
     """
     Run the complete pipeline for stages 4 and 5
     
@@ -16,6 +18,11 @@ def run_pipeline(mesh_path, pose_data_path, smpl_model_path=None, gender='neutra
         render_360: Whether to render 360 degree views
         num_views: Number of views for 360 rendering
         use_matplotlib: Use matplotlib for rendering instead of pyrender
+        optimize_pose: Enable pose optimization to reduce artifacts
+        use_vposer: Use VPoser for pose decoding if available
+        vposer_path: Path to VPoser model checkpoint
+        use_tpose_fallback: Use T-pose if other methods fail
+        debug: Enable debug mode
     """
     print("=" * 50)
     print("Running Stage 4: Pose Imposement")
@@ -33,8 +40,26 @@ def run_pipeline(mesh_path, pose_data_path, smpl_model_path=None, gender='neutra
     if smpl_model_path:
         command.extend(["--smpl_model_path", smpl_model_path])
         
-    # Add gender if provided
+    # Add gender
     command.extend(["--gender", gender])
+    
+    # Add pose optimization flag if enabled
+    if optimize_pose:
+        command.append("--optimize_pose")
+    
+    # Add VPoser options if enabled
+    if use_vposer:
+        command.append("--use_vposer")
+        if vposer_path:
+            command.extend(["--vposer_path", vposer_path])
+    
+    # Add T-pose fallback flag if enabled
+    if use_tpose_fallback:
+        command.append("--use_tpose_fallback")
+    
+    # Add debug flag if enabled
+    if debug:
+        command.append("--debug")
     
     result = subprocess.run(command, capture_output=True, text=True)
     print(result.stdout)
@@ -107,6 +132,16 @@ def main():
                         help="Number of views for 360 rendering")
     parser.add_argument("--use_matplotlib", action="store_true", default=True,
                         help="Use matplotlib for rendering instead of pyrender")
+    parser.add_argument("--optimize_pose", action="store_true", default=True,
+                        help="Enable pose optimization to reduce artifacts")
+    parser.add_argument("--use_vposer", action="store_true", default=True,
+                        help="Use VPoser for pose decoding if available")
+    parser.add_argument("--vposer_path", type=str, default=None,
+                        help="Path to VPoser model checkpoint")
+    parser.add_argument("--use_tpose_fallback", action="store_true", default=True,
+                        help="Use T-pose if other methods fail")
+    parser.add_argument("--debug", action="store_true",
+                        help="Enable debug mode")
     
     args = parser.parse_args()
     
@@ -119,7 +154,12 @@ def main():
         num_poses=args.num_poses,
         render_360=args.render_360,
         num_views=args.num_views,
-        use_matplotlib=args.use_matplotlib
+        use_matplotlib=args.use_matplotlib,
+        optimize_pose=args.optimize_pose,
+        use_vposer=args.use_vposer,
+        vposer_path=args.vposer_path,
+        use_tpose_fallback=args.use_tpose_fallback,
+        debug=args.debug
     )
     
     print("\nPipeline completed successfully!")
