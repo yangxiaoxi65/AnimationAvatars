@@ -162,16 +162,16 @@ class PoseImposement:
     def initialize_smpl_model(self):
         """Initialize the SMPL model for pose application"""
         try:
-            # 指定正确的模型文件和路径
+            # Specify the correct model file and path
             print(f"Trying to load SMPL-X model from {self.smpl_model_path}")
             
-            # 关键修改：将model_path设置为基础目录，而不是smplx目录
+            
             base_dir = os.path.dirname(self.smpl_model_path)
             
             self.smpl_model = smplx.create(
-                model_path=base_dir,  # 使用父目录
+                model_path=base_dir,  
                 model_type='smplx',
-                model_folder=os.path.basename(self.smpl_model_path),  # 使用smplx作为子文件夹名
+                model_folder=os.path.basename(self.smpl_model_path),  
                 gender=self.gender,
                 use_pca=False,
                 create_expression=True,
@@ -186,7 +186,7 @@ class PoseImposement:
         except Exception as e:
             print(f"Error initializing SMPL-X model: {e}")
             try:
-                # 同样修改SMPL模型的加载方式
+                
                 base_dir = os.path.dirname(self.smpl_model_path)
                 
                 self.smpl_model = smplx.create(
@@ -257,16 +257,16 @@ class PoseImposement:
         
         try:
             with torch.no_grad():
-                # 确保输入是PyTorch张量
+                # Ensure input is a PyTorch tensor
                 pose_embedding_tensor = torch.tensor(pose_embedding, dtype=torch.float32, device=self.device)
                 
-                # 尝试直接解码，但不要调用output_type='aa'，避免使用torchgeometry
+                # Try direct decoding, but don't call output_type='aa' to avoid using torchgeometry
                 pose_body = None
                 try:
-                    # 方法1：直接从VPoser获取矩阵旋转表示
-                    result = self.vposer.decode(pose_embedding_tensor)  # 默认返回矩阵旋转表示
+                    # Method 1: Get matrix rotation representation directly from VPoser
+                    result = self.vposer.decode(pose_embedding_tensor)  # Default returns matrix rotation representation
                     
-                    # 如果结果是字典，查找pose_body或pose_matrot
+                    # If result is a dictionary, look for pose_body or pose_matrot
                     if isinstance(result, dict):
                         if 'pose_body' in result:
                             pose_matrot = result['pose_body']
@@ -275,28 +275,28 @@ class PoseImposement:
                     else:
                         pose_matrot = result
                     
-                    # 手动将矩阵旋转表示转换为轴角表示
+                    # Manually convert matrix rotation representation to axis-angle representation
                     if pose_matrot is not None:
-                        # 重塑为合适的形状，假设输出是矩阵旋转
+                       # Reshape to appropriate shape, assuming output is matrix rotation
                         if pose_matrot.shape[-1] == 9:
-                            pose_matrot = pose_matrot.reshape(-1, 21, 3, 3)  # 假设是21个关节
+                            pose_matrot = pose_matrot.reshape(-1, 21, 3, 3)   # Assuming 21 joints
                         elif pose_matrot.shape[-1] != 3 and pose_matrot.dim() > 2:
-                            pose_matrot = pose_matrot.reshape(-1, 21, 3, 3)  # 调整形状
+                            pose_matrot = pose_matrot.reshape(-1, 21, 3, 3)  # Adjust shape
                         
-                        # 初始化轴角表示
+                         # Initialize axis-angle representation
                         pose_body = torch.zeros((1, 63), dtype=torch.float32, device=self.device)
                         
-                        # 手动将每个关节的旋转矩阵转换为轴角
-                        for j in range(pose_matrot.shape[1]):  # 遍历每个关节
-                            # 使用Rodrigues公式或其他方法将旋转矩阵转换为轴角
-                            # 这里简化处理，使用OpenCV或SciPy
+                        # Manually convert each joint's rotation matrix to axis-angle representation
+                        for j in range(pose_matrot.shape[1]): # Iterate through each joint
+                            # Use Rodrigues formula or other methods to convert rotation matrix to axis-angle
+                            # Simplified approach here, using OpenCV or SciPy
                             try:
                                 import cv2
                                 rot_mat = pose_matrot[0, j].cpu().numpy()
-                                # OpenCV的Rodrigues函数可以将3x3旋转矩阵转换为轴角表示
+                                # OpenCV's Rodrigues function can convert 3x3 rotation matrix to axis-angle representation
                                 ax_angle, _ = cv2.Rodrigues(rot_mat)
                                 ax_angle = ax_angle.flatten()
-                                # 填入对应位置
+                                # Fill in corresponding position
                                 pose_body[0, j*3:(j+1)*3] = torch.from_numpy(ax_angle).to(self.device)
                             except ImportError:
                                 try:
@@ -307,27 +307,27 @@ class PoseImposement:
                                     pose_body[0, j*3:(j+1)*3] = torch.from_numpy(ax_angle).to(self.device)
                                 except ImportError:
                                     print("Neither OpenCV nor SciPy available for rotation conversion")
-                                    # 使用近似值
+                                    # Use approximate values
                                     pose_body[0, j*3:(j+1)*3] = torch.zeros(3, dtype=torch.float32, device=self.device)
                 
                 except Exception as e:
                     print(f"Error in matrix rotation conversion: {e}")
                     pose_body = None
                 
-                # 如果以上方法失败，尝试其他方法
+                 # If above methods fail, try alternative methods
                 if pose_body is None:
                     print("Trying alternative decoding method...")
                     try:
-                        # 方法2：直接构造一个从32维到63维的简单映射
-                        # 这只是一个近似方法，结果可能不如直接解码准确
-                        # 从32维扩展到63维（21个关节*3）
+                        # Method 2: Directly construct a simple mapping from 32 dimensions to 63 dimensions
+                        # This is just an approximate method, results may not be as accurate as direct decoding
+                       # Expand from 32 dimensions to 63 dimensions (21 joints * 3)
                         pose_body = torch.zeros((1, 63), dtype=torch.float32, device=self.device)
                         
-                        # 映射前21个维度（如果有）到主要关节
+                        # Map the first 21 dimensions (if available) to main joints
                         min_dim = min(pose_embedding_tensor.shape[1], 21)
                         for i in range(min_dim):
-                            # 为每个主关节设置近似轴角值
-                            # 这是一个简化的线性映射
+                            # Set approximate axis-angle values for each main joint
+                            # This is a simplified linear mapping
                             pose_body[0, i*3] = pose_embedding_tensor[0, i] * 0.2  # x轴
                             if i+1 < pose_embedding_tensor.shape[1]:
                                 pose_body[0, i*3+1] = pose_embedding_tensor[0, i+1] * 0.2  # y轴
@@ -337,11 +337,11 @@ class PoseImposement:
                         print("Generated approximate pose parameters through direct mapping")
                     except Exception as e:
                         print(f"Error in alternative decoding: {e}")
-                        # 最后的备选方案：使用零姿势
+                        # Last fallback: use zero pose
                         pose_body = torch.zeros((1, 63), dtype=torch.float32, device=self.device)
                         print("Using zero pose as fallback")
                 
-                # 返回最终结果
+                # # Return final result
                 print(f"Final body pose shape: {pose_body.shape}")
                 return pose_body
                 
