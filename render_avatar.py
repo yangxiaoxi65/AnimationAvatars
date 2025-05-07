@@ -50,11 +50,33 @@ class AvatarRenderer:
         print(f"Loading mesh from {self.mesh_path}")
         self.trimesh_mesh = trimesh.load(self.mesh_path)
         
+        # Print mesh information for debugging
+        print(f"Mesh visual type: {self.trimesh_mesh.visual.kind}")
+        if hasattr(self.trimesh_mesh.visual, 'uv') and self.trimesh_mesh.visual.uv is not None:
+            print("Mesh has UV coordinates for texture mapping")
+        
         # Create pyrender mesh if available
         global PYRENDER_AVAILABLE
         if PYRENDER_AVAILABLE:
             try:
-                self.mesh = pyrender.Mesh.from_trimesh(self.trimesh_mesh, smooth=True)
+                # If mesh has texture, create mesh with texture
+                if self.trimesh_mesh.visual.kind == 'texture':
+                    material = pyrender.material.MetallicRoughnessMaterial(
+                        baseColorTexture=pyrender.Texture(
+                            source=self.trimesh_mesh.visual.material.image
+                        ),
+                        metallicFactor=0.0,
+                        roughnessFactor=1.0
+                    )
+                    self.mesh = pyrender.Mesh.from_trimesh(
+                        self.trimesh_mesh,
+                        material=material
+                    )
+                    print("Created pyrender mesh with texture")
+                else:
+                    # Standard mesh without texture
+                    self.mesh = pyrender.Mesh.from_trimesh(self.trimesh_mesh, smooth=True)
+                    print("Created standard pyrender mesh")
             except Exception as e:
                 print(f"Error creating pyrender mesh: {e}")
                 PYRENDER_AVAILABLE = False
@@ -272,6 +294,38 @@ class AvatarRenderer:
         vertices = self.trimesh_mesh.vertices
         faces = self.trimesh_mesh.faces
         
+        # Check if mesh has texture
+        has_texture = (hasattr(self.trimesh_mesh.visual, 'uv') and 
+                      self.trimesh_mesh.visual.uv is not None and
+                      self.trimesh_mesh.visual.kind == 'texture')
+        
+        # Prepare face colors if texture is available
+        if has_texture and hasattr(self.trimesh_mesh.visual, 'material') and hasattr(self.trimesh_mesh.visual.material, 'image'):
+            # Get texture and UV coordinates
+            texture = np.array(self.trimesh_mesh.visual.material.image)
+            texture_h, texture_w = texture.shape[:2]
+            uv = self.trimesh_mesh.visual.uv
+            
+            # Compute face colors from texture
+            face_colors = np.zeros((len(faces), 3))
+            for i, face in enumerate(faces):
+                # Get face UV coordinates
+                face_uv = uv[face]
+                
+                # Calculate average UV coordinates for the face
+                u = np.mean(face_uv[:, 0])
+                v = np.mean(face_uv[:, 1])
+                
+                # Convert to texture pixel coordinates
+                x = int(u * texture_w) % texture_w
+                y = int(v * texture_h) % texture_h
+                
+                # Sample texture color
+                face_colors[i] = texture[y, x, :3] / 255.0
+        else:
+            # Use default color if no texture
+            face_colors = None
+        
         # Render from different angles
         for i in range(num_views):
             # Calculate angle
@@ -281,13 +335,21 @@ class AvatarRenderer:
             fig = plt.figure(figsize=(10, 10))
             ax = fig.add_subplot(111, projection='3d')
             
-            # Plot the mesh
-            mesh = ax.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2],
-                                triangles=faces, 
-                                color='gray',
-                                alpha=0.9,
-                                edgecolor=None,
-                                shade=True)
+            # Plot the mesh with texture colors if available
+            if has_texture and face_colors is not None:
+                mesh = ax.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2],
+                                    triangles=faces, 
+                                    facecolors=face_colors,
+                                    alpha=0.9,
+                                    shade=True)
+            else:
+                # Default rendering without texture
+                mesh = ax.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2],
+                                    triangles=faces, 
+                                    color='gray',
+                                    alpha=0.9,
+                                    edgecolor=None,
+                                    shade=True)
             
             # Set equal aspect ratio
             ax.set_box_aspect([1, 1, 1])
@@ -333,13 +395,50 @@ class AvatarRenderer:
         vertices = self.trimesh_mesh.vertices
         faces = self.trimesh_mesh.faces
         
-        # Plot the mesh with enhanced visuals
-        mesh = ax.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2],
-                            triangles=faces, 
-                            color='gray',
-                            alpha=0.9,
-                            edgecolor=None,
-                            shade=True)
+        # Check if mesh has texture
+        has_texture = (hasattr(self.trimesh_mesh.visual, 'uv') and 
+                      self.trimesh_mesh.visual.uv is not None and
+                      self.trimesh_mesh.visual.kind == 'texture')
+        
+        # Plot the mesh with texture if available
+        if has_texture and hasattr(self.trimesh_mesh.visual, 'material') and hasattr(self.trimesh_mesh.visual.material, 'image'):
+            # Get texture and UV coordinates
+            texture = np.array(self.trimesh_mesh.visual.material.image)
+            texture_h, texture_w = texture.shape[:2]
+            uv = self.trimesh_mesh.visual.uv
+            
+            # Compute face colors from texture
+            face_colors = np.zeros((len(faces), 3))
+            for i, face in enumerate(faces):
+                # Get face UV coordinates
+                face_uv = uv[face]
+                
+                # Calculate average UV coordinates for the face
+                u = np.mean(face_uv[:, 0])
+                v = np.mean(face_uv[:, 1])
+                
+                # Convert to texture pixel coordinates
+                x = int(u * texture_w) % texture_w
+                y = int(v * texture_h) % texture_h
+                
+                # Sample texture color
+                face_colors[i] = texture[y, x, :3] / 255.0
+            
+            mesh = ax.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2],
+                                triangles=faces, 
+                                facecolors=face_colors,
+                                alpha=0.9,
+                                shade=True)
+            print("Rendered mesh with texture")
+        else:
+            # Default rendering without texture
+            mesh = ax.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2],
+                                triangles=faces, 
+                                color='gray',
+                                alpha=0.9,
+                                edgecolor=None,
+                                shade=True)
+            print("Rendered mesh without texture")
         
         # Set equal aspect ratio
         ax.set_box_aspect([1, 1, 1])

@@ -5,7 +5,8 @@ from argparse import ArgumentParser
 def run_pipeline(mesh_path, pose_data_path, smpl_model_path=None, gender='neutral', 
                  num_poses=1, render_360=False, num_views=8, use_matplotlib=True,
                  optimize_pose=True, use_vposer=True, vposer_path=None, 
-                 use_tpose_fallback=True, debug=False):
+                 use_tpose_fallback=True, debug=False, data_dir=None, max_images=1,
+                 texture_path=None):
     """
     Run the complete pipeline for stages 4 and 5
     
@@ -23,6 +24,9 @@ def run_pipeline(mesh_path, pose_data_path, smpl_model_path=None, gender='neutra
         vposer_path: Path to VPoser model checkpoint
         use_tpose_fallback: Use T-pose if other methods fail
         debug: Enable debug mode
+        data_dir: Directory containing processed data for texture mapping
+        max_images: Maximum number of images to process for texture mapping
+        texture_path: Path to predefined texture image
     """
     print("=" * 50)
     print("Running Stage 4: Pose Imposement")
@@ -87,16 +91,82 @@ def run_pipeline(mesh_path, pose_data_path, smpl_model_path=None, gender='neutra
     
     print(f"Found {len(posed_mesh_files)} posed mesh files")
     
-    # Render each posed mesh
-    for posed_mesh_path in posed_mesh_files:
+    # If no posed mesh files were found, exit
+    if len(posed_mesh_files) == 0:
+        print("No posed meshes found. Exiting.")
+        return
+    
+    # Run texture mapping if data_dir is provided or texture_path is provided
+    textured_mesh_files = []
+    if data_dir or texture_path:
         print("\n" + "=" * 50)
-        print(f"Running Stage 5: Rendering for {os.path.basename(posed_mesh_path)}")
+        print("Running Stage 4.5: Texture Mapping")
+        print("=" * 50)
+        
+        # Check if texture_mapping.py exists
+        if not os.path.exists("texture_mapping.py"):
+            print("texture_mapping.py not found. Skipping texture mapping.")
+            textured_mesh_files = posed_mesh_files
+        else:
+            # Process each posed mesh
+            for posed_mesh_path in posed_mesh_files:
+                print(f"Applying texture to {os.path.basename(posed_mesh_path)}")
+                
+                # Run texture mapping
+                command = [
+                    "python", "texture_mapping.py",
+                    "--mesh_path", posed_mesh_path
+                ]
+                
+                # Add data_dir if provided
+                if data_dir:
+                    command.extend(["--data_dir", data_dir])
+                
+                # Add max_images
+                command.extend(["--max_images", str(max_images)])
+                
+                # Add texture_path if provided
+                if texture_path:
+                    command.extend(["--texture_path", texture_path])
+                
+                result = subprocess.run(command, capture_output=True, text=True)
+                print(result.stdout)
+                
+                if result.returncode != 0:
+                    print("Error in Texture Mapping:")
+                    print(result.stderr)
+                    textured_mesh_files.append(posed_mesh_path)  # Use original mesh as fallback
+                else:
+                    # Check if textured mesh was created
+                    textured_meshes_dir = os.path.join(base_dir, "textured_meshes")
+                    basename = os.path.basename(posed_mesh_path)
+                    name, ext = os.path.splitext(basename)
+                    textured_filename = f"{name}_textured{ext}"
+                    textured_path = os.path.join(textured_meshes_dir, textured_filename)
+                    
+                    if os.path.exists(textured_path):
+                        textured_mesh_files.append(textured_path)
+                        print(f"Successfully created textured mesh: {textured_path}")
+                    else:
+                        textured_mesh_files.append(posed_mesh_path)  # Use original mesh as fallback
+                        print(f"Textured mesh not found, using original: {posed_mesh_path}")
+    else:
+        # If no data_dir or texture_path provided, use posed meshes without texturing
+        textured_mesh_files = posed_mesh_files
+        print("No data directory or texture path provided. Skipping texture mapping.")
+    
+    # Render each mesh (textured if available, otherwise posed)
+    meshes_to_render = textured_mesh_files if textured_mesh_files else posed_mesh_files
+    
+    for mesh_to_render in meshes_to_render:
+        print("\n" + "=" * 50)
+        print(f"Running Stage 5: Rendering for {os.path.basename(mesh_to_render)}")
         print("=" * 50)
         
         # Run rendering
         command = [
             "python", "render_avatar.py",
-            "--mesh_path", posed_mesh_path
+            "--mesh_path", mesh_to_render
         ]
         
         if render_360:
@@ -142,6 +212,12 @@ def main():
                         help="Use T-pose if other methods fail")
     parser.add_argument("--debug", action="store_true",
                         help="Enable debug mode")
+    parser.add_argument("--data_dir", type=str, default=None,
+                        help="Directory containing processed data for texture mapping")
+    parser.add_argument("--max_images", type=int, default=1,
+                        help="Maximum number of images to process for texture mapping")
+    parser.add_argument("--texture_path", type=str, default=None,
+                        help="Path to predefined texture image")
     
     args = parser.parse_args()
     
@@ -159,7 +235,10 @@ def main():
         use_vposer=args.use_vposer,
         vposer_path=args.vposer_path,
         use_tpose_fallback=args.use_tpose_fallback,
-        debug=args.debug
+        debug=args.debug,
+        data_dir=args.data_dir,
+        max_images=args.max_images,
+        texture_path=args.texture_path
     )
     
     print("\nPipeline completed successfully!")
