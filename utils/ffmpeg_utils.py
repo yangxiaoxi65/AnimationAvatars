@@ -1,7 +1,20 @@
-from ast import Str
 import ffmpeg
 import os
+import subprocess
 
+def check_if_skip_extraction(output_folder: str) -> bool:
+    """
+    Check if the extraction of frames should be skipped.
+
+    Args:
+        output_folder (str): Path to the folder where images are saved.
+
+    Returns:
+        bool: True if the extraction should be skipped, False otherwise.
+    """
+    if not(os.path.isdir(output_folder)) or len(os.listdir(output_folder)) == 0:
+        return False
+    return True
 
 def extract_frames_from_video(video_path: str) -> str:
     """
@@ -22,6 +35,12 @@ def extract_frames_from_video(video_path: str) -> str:
     video_name = os.path.splitext(os.path.basename(video_path))[0]
     video_dir = os.path.dirname(video_path)
     output_folder = os.path.join(video_dir, video_name, 'images')
+    
+    if check_if_skip_extraction(output_folder):
+        print(f"Skipping extraction, {output_folder} already exists")
+        return output_folder
+    
+    print(f"Extracting frames from {video_path} to {output_folder}...")    
     os.makedirs(output_folder, exist_ok=True)
 
     ffmpeg.input(video_path).output(os.path.join(

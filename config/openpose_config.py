@@ -1,12 +1,12 @@
 import os
 
 class OpenposeConfig:
-    def __init__(self, image_folder: str):
+    def __init__(self, base_dir: str):
         # input settings
-        
+        self.input_folder = os.path.join(base_dir, "images")
         # Output settings
-        self.output_json_folder = os.path.join(image_folder, "../openpose_json/")
-        self.output_images_folder = os.path.join(image_folder, "../openpose_images/")
+        self.output_json_folder = os.path.join(base_dir, "openpose_json")
+        self.output_images_folder = os.path.join(base_dir, "openpose_images")
         self.write_images_format = "jpg"
 
         # Pose model settings

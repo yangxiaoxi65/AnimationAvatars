@@ -43,7 +43,7 @@ def validate_folder(folder):
         raise AssertionError(f"Folder {folder} is missing or empty.")
 
 
-def run_openpose(image_folder)-> None:
+def run_openpose(config: OpenposeConfig)-> None:
     """
     Runs OpenPose on a folder of images.
 
@@ -53,18 +53,12 @@ def run_openpose(image_folder)-> None:
 
     Raises:
         Exception: If OpenPose execution or post-processing fails.
+        
     """
-    print("""
-            **********************************
-            *   Stage 1: Running OpenPose..  *
-            **********************************
-          """)
-    logging.info(f"Running on folder: {image_folder}")
-    validate_folder(image_folder)
-    image_folder = os.path.abspath(image_folder)
+    logging.info(f"Running on folder: {config.input_folder}")
+    validate_folder(config.input_folder)
     openpose_root_path = find_openpose_path()
     logging.info(f"OpenPose path: {openpose_root_path}")
-    config = OpenposeConfig(image_folder)
     os.makedirs(config.output_json_folder, exist_ok=True)
     os.makedirs(config.output_images_folder, exist_ok=True)
     logging.info(f"OpenPose configuration: {config}")
@@ -73,7 +67,7 @@ def run_openpose(image_folder)-> None:
         os.chdir(openpose_root_path)
         subprocess.run([
                     './build/examples/openpose/openpose.bin',
-                    '--image_dir', image_folder,
+                    '--image_dir', config.input_folder,
                     '--display', config.display,
                     '--write_json', config.output_json_folder,
                     '--write_images', config.output_images_folder,
@@ -96,4 +90,5 @@ if __name__ == "__main__":
     # Example usage
     logging.basicConfig(level=logging.INFO)
     image_folder = "./assets/7/images"
-    run_openpose(image_folder)
+    config = OpenposeConfig(image_folder)
+    run_openpose(image_folder, config)
