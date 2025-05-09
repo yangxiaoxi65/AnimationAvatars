@@ -5,30 +5,77 @@ import glob
 import os
 from tqdm import tqdm
 
-def process_video(data_dir):
-    sam = sam_model_registry["vit_h"](checkpoint="/school/Computer_Vision/final_proj/segment-anything/checkpoints/sam_vit_h_4b8939.pth")
-    sam.to("cuda")
-    predictor = SamPredictor(sam)
-    img_lists = sorted(glob.glob(f"{data_dir}/images/*.jpg"))
-    keypoints = np.load(f"{data_dir}/keypoints.npy")
-    os.makedirs(f"{data_dir}/masks_sam", exist_ok=True)
-    os.makedirs(f"{data_dir}/masks_sam_images", exist_ok=True)
-    for fn, pts in tqdm(zip(img_lists, keypoints), total=len(img_lists)):
-        img = cv2.imread(fn)
-        predictor.set_image(img)
-        m = pts[..., -1] > 0.5
-        pts = pts[m]
-        masks, _, _ = predictor.predict(pts[:, :2], np.ones_like(pts[:, 0]))
-        mask = masks.sum(axis=0) > 0
-        cv2.imwrite(fn.replace("images", "masks_sam"), mask * 255)
+from config.sam_config import SamConfig
 
-        img[~mask] = 0
-        cv2.imwrite(fn.replace("images", "masks_sam_images"), img)
+def process_video(config: SamConfig):
+    """
+    Process video frames using SAM (Segment Anything Model) to generate masks.
+    
+    Args:
+        config (SamConfig): configuration object containing model and input/output settings.
+    """
+    
+    # Create output directories
+    os.makedirs(config.mask_dir, exist_ok=True)
+    os.makedirs(config.mask_image_dir, exist_ok=True)
+    
+    # Load SAM model
+    sam = sam_model_registry[config.model_type](checkpoint=config.checkpoint_dir)
+    sam.to(config.device)
+    predictor = SamPredictor(sam)
+    
+    # Get input files
+    img_lists = sorted(glob.glob(config.image_pattern))
+    
+    # Check if necessary files exist
+    if not img_lists:
+        raise FileNotFoundError(f"No matching for: {config.image_pattern}")
+    if not os.path.exists(config.keypoints_path):
+        raise FileNotFoundError(f"Keypoints file not found: {config.keypoints_path}")
+        
+    keypoints = np.load(config.keypoints_path, allow_pickle=True)
+    
+    # Process each image
+    for file_name, pts in tqdm(zip(img_lists, keypoints), total=len(img_lists)):
+        img = cv2.imread(file_name)
+        if img is None:
+            print(f"Warning: Could not read image {file_name}, skipping")
+            continue
+            
+        predictor.set_image(img)
+        
+        # Filter keypoints by confidence
+        valid_mask = pts[..., -1] > 0.5
+        valid_pts = pts[valid_mask]
+        
+        if len(valid_pts) == 0:
+            print(f"Warning: No valid keypoints found for {file_name}, skipping")
+            continue
+        
+        # Generate masks
+        masks, _, _ = predictor.predict(
+            point_coords=valid_pts[:, :2],
+            point_labels=np.ones_like(valid_pts[:, 0])
+        )
+        
+        # Combine all masks
+        combined_mask = masks.sum(axis=0) > 0
+        
+        # Save mask
+        mask_filename = os.path.join(config.mask_dir, os.path.basename(file_name))
+        cv2.imwrite(mask_filename, combined_mask.astype(np.uint8) * 255)
+        
+        # Apply mask to image and save
+        masked_img = img.copy()
+        masked_img[~combined_mask] = 0
+        masked_img_filename = os.path.join(config.mask_image_dir, os.path.basename(file_name))
+        cv2.imwrite(masked_img_filename, masked_img)
+
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", type=str, default=None)
     args = parser.parse_args()
-
-    process_video(args.data_dir)
+    config = SamConfig(args.data_dir)
+    process_video(config)

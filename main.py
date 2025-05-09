@@ -2,10 +2,13 @@ import argparse
 import logging
 import os
 
+from config import sam_config
 from config.openpose_config import OpenposeConfig
+from config.sam_config import SamConfig
 from utils.ffmpeg_utils import extract_frames_from_video
 from utils.convert_openpose_json_to_npy import convert
 from run_openpose import run_openpose
+from run_sam import process_video
 
 
 def parse_args():
@@ -40,12 +43,20 @@ def main(args):
         **********************************
         """)
     base_dir = os.path.abspath(os.path.dirname(frames_dir))
-    config = OpenposeConfig(base_dir)
+    openpose_config = OpenposeConfig(base_dir)
     if os.path.exists(os.path.join(base_dir, "keypoints.npy")):
         print("Keypoints already exist, skipping OpenPose.")
     else:
-        run_openpose(config)
-        convert(config.output_json_folder)
+        run_openpose(openpose_config)
+        convert(openpose_config.output_json_folder)
+    print("""
+        **********************************
+        *   Stage 2: Running  SAM..      *
+        **********************************
+        """)
+    sam_config = SamConfig(base_dir)
+    process_video(sam_config)
+    
 
 
 
