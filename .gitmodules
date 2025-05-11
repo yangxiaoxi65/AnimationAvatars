@@ -4,3 +4,6 @@
 [submodule "GaussianAvatar"]
 	path = GaussianAvatar
 	url = https://github.com/SE-starshippilot/GaussianAvatar.git
+[submodule "smplify-x"]
+	path = smplify-x
+	url = https://github.com/vchoutas/smplify-x.git
