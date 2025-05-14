@@ -2,11 +2,13 @@ import argparse
 import logging
 import os
 
-from config import sam_config
+import cv2
+import numpy as np
 from config.openpose_config import OpenposeConfig
 from config.sam_config import SamConfig
 from utils.ffmpeg_utils import extract_frames_from_video
 from utils.convert_openpose_json_to_npy import convert
+from utils.gen_camera import gen_camera_params
 from run_openpose import run_openpose
 from run_sam import process_video
 
@@ -56,7 +58,21 @@ def main(args):
         """)
     sam_config = SamConfig(base_dir)
     process_video(sam_config)
+    print("""
+        **********************************
+        *   Stage 3: Generating camera parameters  *
+        **********************************
+        """)
     
+    # save camera parameters
+    sample_image_name = os.listdir(openpose_config.input_folder)[0]
+    sample_image_path = os.path.join(
+        openpose_config.input_folder, sample_image_name)
+    img = cv2.imread(sample_image_path)
+    cam_parms = gen_camera_params(img, fov=60)
+    np.save(base_dir + "/cameras.npz", cam_parms)
+    
+    # use simplify-x
 
 
 
