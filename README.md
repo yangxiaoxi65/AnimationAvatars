@@ -59,7 +59,7 @@ assets/smpl_files
     └── SMPLX_NEUTRAL.npz
 ```
 
-6. == TODO: Mention setup form Smimplify-X==
+6. Inside the data folder you must have an image and a .json file of keypoints with the same name inside the data/images and data/keypoints folder repsectively for the keypoints you want to run through the SMPL-X model.
 
 ## Running the pipeline
 
@@ -83,7 +83,17 @@ assets/{video_name}
 ```
 
 ### Stage 3: SMPLify-X
-TODO: Add instructions for running stage 3
+Run the following command to run all keypoints files within the data folder through the model. This code would run the neutral model on CPU but other models are available.
+python smplifyx/main.py \
+  --config cfg_files/fit_smplx.yaml \
+  --data_folder data/keypoints \
+  --output_folder output \
+  --visualize=False \
+  --model_folder models \
+  --vposer_ckpt vposer_v1_0 \
+  --part_segm_fn smplx/parts_segm.pkl \
+  --gender neutral \
+  --use_cuda False
 
 
 Optionally, you can use `refine-smpl.py` to refine the SMPL parameters. If you decide not to do so, just copy and rename the `poses.npz` file in the `assets/{video_name}` folder to `poses_optimized.npz`. 
